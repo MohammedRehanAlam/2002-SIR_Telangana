@@ -1,0 +1,17 @@
+{
+  "summary": {
+    "totalFoundInDirectory": 8287,
+    "successfullyIndexed": 8286,
+    "skippedEmpty": 1,
+    "corruptedFailed": 0,
+    "ignoredUnsupported": 0
+  },
+  "corruptedFiles": [],
+  "skippedFiles": [
+    {
+      "path": "Telangana/Mahaboob Nagar/198-Amarchinta/S29_198_100.pdf",
+      "reason": "Empty text / No content extracted"
+    }
+  ],
+  "ignoredFiles": []
+}
