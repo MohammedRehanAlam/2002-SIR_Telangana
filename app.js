@@ -578,7 +578,7 @@ function buildDD(lv, pNode, path) {
   const lb = document.createElement('label'); lb.className = 'dropdown-label'; lb.textContent = lv === 0 ? `📁 ${databaseTree.name}` : `📂 ${path[path.length - 1]}`;
   const sel = document.createElement('select'); sel.className = 'dropdown-select';
   const ao = document.createElement('option'); ao.value = '__all__'; ao.textContent = lv === 0 ? `All in "${databaseTree.name}"` : `All in "${path[path.length - 1]}"`; sel.appendChild(ao);
-  for (const ch of pNode.children) { const o = document.createElement('option'); o.value = ch.name; const fc = countFiles(ch); o.textContent = `📂 ${ch.name}  (${fc} file${fc !== 1 ? 's' : ''})`; sel.appendChild(o); }
+  for (const ch of pNode.children) { const o = document.createElement('option'); o.value = ch.name; const fc = countFiles(ch); o.textContent = `📂 ${ch.name}`; sel.appendChild(o); } // `📂 ${ch.name}  (${fc} file${fc !== 1 ? 's' : ''})`;
   if (lv < selectedPath.length) sel.value = selectedPath[lv];
   sel.addEventListener('change', () => { selectedPath = sel.value === '__all__' ? selectedPath.slice(0, lv) : [...selectedPath.slice(0, lv), sel.value]; renderDropdowns(); });
   g.appendChild(lb); g.appendChild(sel); return g;
