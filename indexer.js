@@ -405,6 +405,37 @@ async function extractSections(filePath, ext) {
   throw new Error(`File is completely unreadable or empty.`);
 }
 
+// Helper to split merged address and name
+function splitAddressAndName(text) {
+  const tokens = text.split(/\s+/).filter(t => t.trim().length > 0);
+  if (tokens.length < 2) return { address: text, name: "" };
+
+  const isNameToken = (t) => !/[\d/]/.test(t);
+
+  let splitIdx = -1;
+  for (let i = 0; i < tokens.length; i++) {
+    let allSubsequentAreName = true;
+    for (let j = i; j < tokens.length; j++) {
+      if (!isNameToken(tokens[j])) {
+        allSubsequentAreName = false;
+        break;
+      }
+    }
+    if (allSubsequentAreName) {
+      splitIdx = i;
+      break;
+    }
+  }
+
+  if (splitIdx > 0 && splitIdx < tokens.length) {
+    const address = tokens.slice(0, splitIdx).join(" ");
+    const name = tokens.slice(splitIdx).join(" ");
+    return { address, name };
+  }
+
+  return { address: text, name: "" };
+}
+
 async function extractPDF(buffer) {
   const uint8Array = new Uint8Array(buffer);
   const loadingTask = pdfjs.getDocument({ data: uint8Array, useSystemFonts: true, disableFontFace: true });
@@ -446,6 +477,56 @@ async function extractPDF(buffer) {
       });
       return rowCells;
     });
+
+    // Post-process structuredRows to split merged Address & Elector Name
+    let electorNameColIdx = -1;
+    let houseNoColIdx = -1;
+    for (let rIdx = 0; rIdx < Math.min(10, structuredRows.length); rIdx++) {
+      const row = structuredRows[rIdx];
+      for (let cIdx = 0; cIdx < row.length; cIdx++) {
+        const cellText = (row[cIdx] || "").trim().toLowerCase();
+        if ((cellText.includes("elector") || cellText.includes("name")) && !cellText.includes("relation")) {
+          electorNameColIdx = cIdx;
+        }
+        if (cellText.includes("house") || cellText.includes("addr") || cellText.includes("section")) {
+          houseNoColIdx = cIdx;
+        }
+      }
+      if (electorNameColIdx !== -1 && houseNoColIdx !== -1) break;
+    }
+
+    structuredRows.forEach((row) => {
+      const rowText = row.join(" ").toLowerCase();
+      if (rowText.includes("elector") || rowText.includes("constituency") || rowText.includes("relation") || rowText.includes("epic")) {
+        return; 
+      }
+
+      for (let cIdx = 0; cIdx < row.length; cIdx++) {
+        let val = (row[cIdx] || "").trim();
+        if (!val) continue;
+
+        const splitResult = splitAddressAndName(val);
+        if (splitResult.name) {
+          row[cIdx] = splitResult.address;
+
+          let targetCol = electorNameColIdx;
+          if (targetCol === -1 || targetCol === cIdx) {
+            for (let j = cIdx + 1; j < row.length; j++) {
+              if ((row[j] || "").trim() === "") {
+                targetCol = j;
+                break;
+              }
+            }
+          }
+          if (targetCol !== -1 && targetCol !== cIdx) {
+            row[targetCol] = row[targetCol] ? (row[targetCol] + " " + splitResult.name) : splitResult.name;
+          } else {
+            row.push(splitResult.name);
+          }
+        }
+      }
+    });
+
     s.push({ location: `Page ${p}`, text: structuredRows.map(r => r.join(" \t ")).join("\n"), type: 'table', data: structuredRows });
   }
   return s;
