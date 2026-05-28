@@ -5,11 +5,17 @@ const mammoth = require('mammoth');
 const XLSX = require('xlsx');
 const JSZip = require('jszip');
 const zlib = require('zlib');
+const crypto = require('crypto');
 
 // Load configuration from app.js (single source of truth)
 const appJsContent = fs.readFileSync(path.join(__dirname, 'app.js'), 'utf8');
 const DATABASE_DIR_NAME = appJsContent.match(/const\s+DATABASE_DIR_NAME\s*=\s*'([^']+)'/)?.[1] || 'database';
 const COMPRESSED_SEARCH_INDEXES = appJsContent.match(/const\s+COMPRESSED_SEARCH_INDEXES\s*=\s*(true|false)/)?.[1] !== 'false';
+
+// Calculate SHA-256 hash of parser and indexer logic to detect updates
+const indexerCode = fs.readFileSync(__filename, 'utf8');
+const codeHash = crypto.createHash('sha256').update(indexerCode + appJsContent).digest('hex');
+const forceFlag = process.argv.includes('--force');
 
 // Configuration
 const DB_DIR = path.join(__dirname, DATABASE_DIR_NAME);
@@ -41,10 +47,17 @@ async function run() {
   // Load existing index info if it exists for smart-skipping
   const infoPath = path.join(DB_DIR, 'search-index-info.json');
   let oldInfo = null;
+  let forceFullRebuild = forceFlag;
   try {
     if (await fs.pathExists(infoPath)) {
       oldInfo = await fs.readJson(infoPath);
-      console.log('📦 Loaded existing search-index-info.json for smart-skipping.');
+      if (oldInfo.codeHash !== codeHash) {
+        console.log('\n⚠️  [Cache Invalidation] Extraction/detection logic has been modified since the last run.');
+        console.log('⚙️  Forcing a full rebuild to apply updated parsing logic to all files!');
+        forceFullRebuild = true;
+      } else {
+        console.log('📦 Loaded existing search-index-info.json for smart-skipping.');
+      }
     }
   } catch (err) {
     // Ignore error
@@ -125,7 +138,7 @@ async function run() {
       let sections = null;
       let isCached = false;
 
-      if (oldInfo && oldInfo.fileToChunk && oldInfo.fileToChunk[relPath]) {
+      if (!forceFullRebuild && oldInfo && oldInfo.fileToChunk && oldInfo.fileToChunk[relPath]) {
         try {
           const stats = await fs.stat(filePath);
           if (stats.mtimeMs < oldInfo.indexedAt) {
@@ -205,6 +218,7 @@ async function run() {
   const infoObj = {
     totalChunks: chunkCount,
     indexedAt: Date.now(),
+    codeHash: codeHash,
     fileToChunk,
     compressed: COMPRESSED_SEARCH_INDEXES
   };
