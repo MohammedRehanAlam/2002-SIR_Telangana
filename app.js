@@ -16,17 +16,15 @@ const CacheManager = {
   CACHE_NAME: 'fetcher-index-cache-v1',
   async get(url) {
     try {
-      const key = url.split('?')[0]; // Strip timestamp for cache key
       const cache = await caches.open(this.CACHE_NAME);
-      const res = await cache.match(key);
+      const res = await cache.match(url);
       return res ? await res.json() : null;
     } catch { return null; }
   },
   async set(url, data) {
     try {
-      const key = url.split('?')[0]; // Strip timestamp for cache key
       const cache = await caches.open(this.CACHE_NAME);
-      await cache.put(key, new Response(JSON.stringify(data)));
+      await cache.put(url, new Response(JSON.stringify(data)));
     } catch (e) { console.warn('Cache set failed:', e); }
   },
   async clear() { try { await caches.delete(this.CACHE_NAME); } catch {} }
@@ -284,13 +282,7 @@ async function tryLoadPrecomputedIndex(scopeKeys) {
         info = await infoRes.json();
         totalChunks = info.totalChunks;
         
-        // Auto Cache Invalidation: if index has been re-generated, clear stale browser cache!
-        const cachedIndexedAt = localStorage.getItem('fetcher_index_indexed_at');
-        if (info.indexedAt && String(info.indexedAt) !== cachedIndexedAt) {
-          console.log('🔄 Freshly indexed database detected. Clearing browser cache...');
-          await CacheManager.clear();
-          localStorage.setItem('fetcher_index_indexed_at', String(info.indexedAt));
-        }
+        // Granular chunk caching is handled dynamically via URL timestamps in chunkTimestamps!
       }
     } catch (e) { console.log('Metadata not found, falling back to serial discovery.'); }
 
@@ -330,7 +322,8 @@ async function tryLoadPrecomputedIndex(scopeKeys) {
       const fetchPromises = [];
       chunksToLoad.forEach((chunkIdx) => {
         const fileName = `search-index-${chunkIdx}${extSuffix}`; // chunkIdx from fileToChunk is 1-based
-        const url = `${DATABASE_DIR_NAME}/${fileName}?t=` + Date.now();
+        const chunkTime = (info && info.chunkTimestamps && info.chunkTimestamps[chunkIdx]) || Date.now();
+        const url = `${DATABASE_DIR_NAME}/${fileName}?t=${chunkTime}`;
         
         fetchPromises.push(
           (async () => {
@@ -374,7 +367,8 @@ async function tryLoadPrecomputedIndex(scopeKeys) {
       let chunkIdx = 1; // starts at 1, matching the 1-based file naming (search-index-1.json, search-index-2.json...)
       while (true) {
         const fileName = `search-index-${chunkIdx}${extSuffix}`;
-        const url = `${DATABASE_DIR_NAME}/${fileName}?t=` + Date.now();
+        const chunkTime = (info && info.chunkTimestamps && info.chunkTimestamps[chunkIdx]) || Date.now();
+        const url = `${DATABASE_DIR_NAME}/${fileName}?t=${chunkTime}`;
         let data = await CacheManager.get(url);
         if (!data) {
           const res = await fetch(url);
