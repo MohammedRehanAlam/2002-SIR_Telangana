@@ -6,6 +6,7 @@ const AUTO_LOAD_DB = true; // Set to true to automatically load the database on 
 const SNIPPET_RADIUS = 100;
 const ENABLE_INDEXING = true;
 const COMPRESSED_SEARCH_INDEXES = true; // Set to true to use compressed search indexes (.json.gz) by default
+const REINDEX_ON_CODE_CHANGE = false; // Set to false to prevent full reindexing when codebase is modified
 const MIN_FOLDER_DEPTH = 1; // Developer can change this to 1, 3, etc.
 
 if (typeof pdfjsLib !== 'undefined')
