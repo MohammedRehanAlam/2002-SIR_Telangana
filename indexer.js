@@ -13,6 +13,7 @@ const os = require('os');
 const appJsContent = fs.readFileSync(path.join(__dirname, 'app.js'), 'utf8');
 const DATABASE_DIR_NAME = appJsContent.match(/const\s+DATABASE_DIR_NAME\s*=\s*'([^']+)'/)?.[1] || 'database';
 const COMPRESSED_SEARCH_INDEXES = appJsContent.match(/const\s+COMPRESSED_SEARCH_INDEXES\s*=\s*(true|false)/)?.[1] !== 'false';
+const REINDEX_ON_CODE_CHANGE = appJsContent.match(/const\s+REINDEX_ON_CODE_CHANGE\s*=\s*(true|false)/)?.[1] !== 'false';
 
 // Calculate SHA-256 hash of parser and indexer logic to detect updates
 const indexerCode = fs.readFileSync(__filename, 'utf8');
@@ -53,12 +54,16 @@ async function run() {
   try {
     if (await fs.pathExists(infoPath)) {
       oldInfo = await fs.readJson(infoPath);
-      if (oldInfo.codeHash !== codeHash) {
+      if (REINDEX_ON_CODE_CHANGE && oldInfo.codeHash !== codeHash) {
         console.log('\n⚠️  [Cache Invalidation] Extraction/detection logic has been modified since the last run.');
         console.log('⚙️  Forcing a full rebuild to apply updated parsing logic to all files!');
         forceFullRebuild = true;
       } else {
-        console.log('📦 Loaded existing search-index-info.json for smart-skipping.');
+        if (oldInfo.codeHash !== codeHash) {
+          console.log('📦 Loaded existing search-index-info.json for smart-skipping (code change reindexing bypassed).');
+        } else {
+          console.log('📦 Loaded existing search-index-info.json for smart-skipping.');
+        }
       }
     }
   } catch (err) {
